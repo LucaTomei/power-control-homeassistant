@@ -28,7 +28,8 @@ cards needed.
 - ❄️ **Air conditioners get their mode back** (heat stays heat, cool stays cool)
 - 🙋 **Switched on by hand?** It is removed from the list, it will not be touched again
 - 🛡️ **Safe**: an unavailable meter is never read as 0 W, nothing is switched on or off without a valid reading
-- 💾 **Survives restarts**: the switched-off loads and the countdown are saved
+- 💾 **Survives restarts and updates**: the switched-off loads, the countdown, the thresholds and the switches are saved as soon as they change
+- ♻️ **Configuration backup**: removed and added again? The setup offers to restore loads, sensors, notifications and thresholds
 - 📲 **Notifications you choose**: phones (optionally only people at home), Alexa or any speaker with text-to-speech, quiet hours, which events
 - 📢 **`power_control_event`** on the bus for your own automations
 - 🇬🇧 🇮🇹 English and Italian
@@ -64,13 +65,17 @@ Copy `custom_components/power_control` into `config/custom_components/` (or extr
 
 ## 🛠️ Configuration
 
-1. **Setup**: choose the house power meter (W or kW) and the contract power.
-2. **Configure** (menu):
+1. **Setup**: choose the house power meter (W or kW) and the contract power. If Power
+   Control was installed before, you can restore its whole configuration.
+2. **Configure** (menu): each section is saved as soon as you confirm it.
    - **Loads and switch-off order**: pick the loads and drag them. The first is the first to be switched off.
    - **Power sensors and automatic restore**: the sensor found automatically is shown for each load; pick one by hand where needed (multi-socket strips), and choose the loads that must never be switched back on automatically.
    - **Notifications**: phones (`notify.mobile_app_…`), only people at home, which events, speakers and quiet hours.
+   - **Presence at home**: for each phone, the sensor telling whether its owner is at home (a person,
+     a device tracker, or a binary sensor / input boolean that is on at home). Used only with
+     "Only to people at home". Left empty, it is found automatically for Companion app phones;
+     a phone with no presence sensor always gets the notifications.
    - **Advanced**: warning time, urgent delay, pause between loads, restore delay, standby power, meter.
-   - **Save and close**.
 
 > [!WARNING]
 > Switching off a washing machine or a dishwasher in the middle of a cycle may stop its
@@ -165,7 +170,8 @@ Si configura tutto da Home Assistant, senza YAML.
 - **I condizionatori tornano nella modalità di prima** (caldo resta caldo).
 - **Riacceso a mano?** Esce dalla lista, non viene più toccato.
 - **Sicuro**: se il misuratore è "non disponibile" non viene letto come 0 W e non si accende né si spegne niente.
-- **Resiste ai riavvii**: carichi spenti e conto alla rovescia vengono salvati.
+- **Resiste a riavvii e aggiornamenti**: carichi spenti, conto alla rovescia, soglie e interruttori vengono salvati appena cambiano.
+- **Backup della configurazione**: se rimuovi e riaggiungi l'integrazione, il setup propone di ripristinare carichi, sensori, avvisi e soglie.
 - **Avvisi a scelta**: telefoni (anche solo a chi è in casa), Alexa o altoparlanti con sintesi vocale, fascia oraria, quali eventi.
 
 ### Soglie predefinite (contratto 3 kW)
@@ -178,6 +184,12 @@ Si cambiano quando vuoi dalla dashboard.
 HACS → ⋮ → **Custom repositories** → aggiungi `https://github.com/LucaTomei/power-control-homeassistant`
 come **Integrazione**, scarica **Power Control**, riavvia e aggiungi l'integrazione da
 Impostazioni → Dispositivi e servizi.
+
+Nelle impostazioni (icona ingranaggio) ogni sezione viene salvata appena confermi:
+**Carichi**, **Sensori di consumo**, **Avvisi**, **Presenza in casa** (per ogni telefono il
+sensore che dice se il proprietario è in casa: persona, device tracker, binary sensor o
+input boolean; se lasci vuoto viene cercato in automatico, e un telefono senza sensore di
+presenza riceve sempre gli avvisi) e **Avanzate**.
 
 > [!WARNING]
 > Spegnere lavatrice o lavastoviglie a metà ciclo può interrompere il programma: mettile

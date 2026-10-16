@@ -17,6 +17,7 @@ CONF_LOAD_SENSORS: Final = "load_sensors"  # {load entity_id: power sensor entit
 CONF_NO_RESTORE: Final = "no_restore"  # loads never switched back on automatically
 CONF_NOTIFY_SERVICES: Final = "notify_services"  # e.g. ["mobile_app_iphone"]
 CONF_NOTIFY_ONLY_HOME: Final = "notify_only_home"
+CONF_NOTIFY_PRESENCE: Final = "notify_presence"  # {notify service: presence entity_id}
 CONF_VOICE_PLAYERS: Final = "voice_players"
 CONF_TTS_ENTITY: Final = "tts_entity"
 CONF_VOICE_START: Final = "voice_start"
@@ -61,6 +62,9 @@ LOAD_DOMAINS: Final = [
     "media_player",
     "input_boolean",
 ]
+
+# Domains that can tell whether the owner of a phone is at home
+PRESENCE_DOMAINS: Final = ["person", "device_tracker", "binary_sensor", "input_boolean"]
 
 # Engine status values (sensor "Stato")
 STATUS_DISABLED: Final = "disabled"

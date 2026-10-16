@@ -8,9 +8,13 @@ from typing import Any
 
 from freezegun.api import FrozenDateTimeFactory
 import pytest
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant_custom_component.common import (
+    MockConfigEntry,
+    async_fire_time_changed,
+    mock_restore_cache_with_extra_data,
+)
 
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant, State, callback
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import entity_registry as er
 
@@ -410,3 +414,92 @@ async def test_slow_notification_does_not_block_the_engine(
     assert house.off_calls() == [washer]
     release.set()
     await hass.async_block_till_done(wait_background_tasks=True)
+
+
+async def test_settings_are_saved_at_once(
+    hass: HomeAssistant, house: House, freezer: FrozenDateTimeFactory, hass_storage: dict[str, Any]
+) -> None:
+    engine = await setup(hass, house, [])
+    await hass.services.async_call(
+        "number", "set_value", {"entity_id": "number.power_control_shed_threshold", "value": 3500}, blocking=True
+    )
+    await hass.services.async_call(
+        "switch", "turn_off", {"entity_id": "switch.power_control_push_notifications"}, blocking=True
+    )
+    freezer.tick(timedelta(seconds=2))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+    saved = hass_storage[f"{DOMAIN}.{engine.entry.entry_id}"]["data"]
+    assert saved["thresholds"]["shed_w"] == 3500
+    assert saved["switches"] == {"enabled": True, "push": False, "voice": True}
+    backup = hass_storage[f"{DOMAIN}.backup"]["data"]
+    assert backup["thresholds"]["shed_w"] == 3500
+    assert backup["options"]["notify_services"] == ["mobile_app_phone_luca"]
+
+
+async def test_update_from_an_older_version_keeps_the_thresholds(
+    hass: HomeAssistant, house: House, hass_storage: dict[str, Any]
+) -> None:
+    """Older versions kept thresholds and switches only in the entities' restored state."""
+    hass_storage[f"{DOMAIN}.old_entry"] = {"version": 1, "key": f"{DOMAIN}.old_entry", "data": {"shed": []}}
+    number = {
+        "native_max_value": 30000,
+        "native_min_value": 100,
+        "native_step": 50,
+        "native_unit_of_measurement": "W",
+        "native_value": 3600,
+    }
+    mock_restore_cache_with_extra_data(
+        hass,
+        [
+            (State("number.power_control_shed_threshold", "3600"), number),
+            (State("switch.power_control_voice_notifications", "off"), {}),
+        ],
+    )
+    entry = MockConfigEntry(
+        domain=DOMAIN, entry_id="old_entry", data={"meter": METER, "contract_kw": 3}, options=FAST, unique_id=DOMAIN
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    assert entry.runtime_data.settings.shed_w == 3600
+    assert entry.runtime_data.notifier.voice_enabled is False
+
+
+async def test_switched_off_loads_survive_remove_and_restore(
+    hass: HomeAssistant, house: House, freezer: FrozenDateTimeFactory
+) -> None:
+    washer = house.add_plug("lavatrice", 2000)
+    house.set_base(1800)
+    engine = await setup(hass, house, [washer])
+    await advance(hass, engine, freezer, minutes=61)
+    assert [i["entity_id"] for i in engine.shed] == [washer]
+    assert await hass.config_entries.async_remove(engine.entry.entry_id)
+    await hass.async_block_till_done()
+
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
+    await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"meter": METER, "contract_kw": 3, "restore_previous": True}
+    )
+    await hass.async_block_till_done()
+    engine = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
+    assert [i["entity_id"] for i in engine.shed] == [washer]
+    house.set_base(300)
+    await advance(hass, engine, freezer, seconds=10)
+    await advance(hass, engine, freezer, seconds=61)
+    assert house.on_calls() == [washer]
+
+
+async def test_failed_switch_off_is_not_recorded(
+    hass: HomeAssistant, house: House, freezer: FrozenDateTimeFactory
+) -> None:
+    washer = house.add_plug("lavatrice", 2000)
+    house.set_base(1800)
+    engine = await setup(hass, house, [washer])
+
+    async def broken(call) -> None:
+        raise RuntimeError("device offline")
+
+    hass.services.async_register("light", "turn_off", broken)
+    await advance(hass, engine, freezer, minutes=61)
+    assert engine.shed == []

@@ -8,13 +8,18 @@ on:
 
 jobs:
   tests:
-    name: Test
+    name: Test (Python ${{ matrix.python }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # each gets the newest Home Assistant that runs on it (3.14: the latest release)
+        python: ["3.13", "3.14"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
+          python-version: ${{ matrix.python }}
           cache: pip
           cache-dependency-path: requirements_test.txt
       - name: Install dependencies

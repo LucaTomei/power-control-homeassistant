@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Final
 
 import voluptuous as vol
 
@@ -33,6 +33,7 @@ from .const import (
     CONF_MIN_ACTIVE_W,
     CONF_NO_RESTORE,
     CONF_NOTIFY_ONLY_HOME,
+    CONF_NOTIFY_PRESENCE,
     CONF_NOTIFY_SERVICES,
     CONF_RESTORE_DELAY,
     CONF_SHED_INTERVAL,
@@ -53,8 +54,12 @@ from .const import (
     DEFAULT_WARNING_MINUTES,
     DOMAIN,
     LOAD_DOMAINS,
+    PRESENCE_DOMAINS,
 )
-from .engine import auto_power_sensor
+from .engine import auto_power_sensor, backup_store
+from .notifier import auto_presence
+
+CONF_RESTORE: Final = "restore_previous"
 
 # Any sensor: some integrations do not set device_class "power" on their sensors
 POWER_SENSOR = EntitySelector(EntitySelectorConfig(filter=[{"domain": "sensor"}]))
@@ -73,6 +78,7 @@ def default_options() -> dict[str, Any]:
         CONF_NO_RESTORE: [],
         CONF_NOTIFY_SERVICES: [],
         CONF_NOTIFY_ONLY_HOME: True,
+        CONF_NOTIFY_PRESENCE: {},
         CONF_VOICE_PLAYERS: [],
         CONF_VOICE_START: DEFAULT_VOICE_START,
         CONF_VOICE_END: DEFAULT_VOICE_END,
@@ -88,20 +94,37 @@ class PowerControlConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         await self.async_set_unique_id(DOMAIN)
         self._abort_if_unique_id_configured()
+        # Configuration of a previous installation (removed and added again)
+        store = backup_store(self.hass)
+        backup = await store.async_load() or {}
+        previous = backup.get("options") if isinstance(backup.get("options"), dict) else None
         errors: dict[str, str] = {}
         if user_input is not None:
-            if self.hass.states.get(user_input[CONF_METER]) is None:
+            data = {k: v for k, v in user_input.items() if k != CONF_RESTORE}
+            if self.hass.states.get(data[CONF_METER]) is None:
                 errors[CONF_METER] = "meter_not_found"
             else:
-                return self.async_create_entry(title="Power Control", data=user_input, options=default_options())
-        schema = vol.Schema(
-            {
-                vol.Required(CONF_METER): POWER_SENSOR,
-                vol.Required(CONF_CONTRACT_KW, default=DEFAULT_CONTRACT_KW): _number(1, 50, 0.5, "kW"),
-            }
-        )
+                options = default_options()
+                if previous and user_input.get(CONF_RESTORE):
+                    # the meter just chosen wins over the one saved in the advanced settings
+                    options.update({k: v for k, v in previous.items() if k != CONF_METER})
+                else:
+                    await store.async_save({"fresh": True})  # start from scratch, thresholds included
+                return self.async_create_entry(title="Power Control", data=data, options=options)
+        fields: dict[Any, Any] = {
+            vol.Required(CONF_METER): POWER_SENSOR,
+            vol.Required(CONF_CONTRACT_KW, default=DEFAULT_CONTRACT_KW): _number(1, 50, 0.5, "kW"),
+        }
+        suggested = user_input
+        if previous:
+            fields[vol.Required(CONF_RESTORE, default=True)] = BooleanSelector()
+            if suggested is None and isinstance(backup.get("data"), dict):
+                suggested = {**backup["data"], CONF_METER: previous.get(CONF_METER) or backup["data"].get(CONF_METER)}
         return self.async_show_form(
-            step_id="user", data_schema=self.add_suggested_values_to_schema(schema, user_input), errors=errors
+            step_id="user",
+            data_schema=self.add_suggested_values_to_schema(vol.Schema(fields), suggested),
+            errors=errors,
+            description_placeholders={"loads": str(len(previous.get(CONF_LOADS) or [])) if previous else "0"},
         )
 
     @staticmethod
@@ -132,10 +155,11 @@ class PowerControlOptionsFlow(OptionsFlow):
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         return self.async_show_menu(
-            step_id="init", menu_options=["loads", "sensors", "notifications", "advanced", "save"]
+            step_id="init", menu_options=["loads", "sensors", "notifications", "presence", "advanced"]
         )
 
-    async def async_step_save(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+    def _async_save(self) -> ConfigFlowResult:
+        """Every section is saved as soon as it is confirmed: closing the dialog loses nothing."""
         return self.async_create_entry(data=self.options)
 
     # -------------------------------------------------------------- loads
@@ -147,7 +171,7 @@ class PowerControlOptionsFlow(OptionsFlow):
                 k: v for k, v in self.options.get(CONF_LOAD_SENSORS, {}).items() if k in loads
             }
             self.options[CONF_NO_RESTORE] = [e for e in self.options.get(CONF_NO_RESTORE, []) if e in loads]
-            return await self.async_step_init()
+            return self._async_save()
         schema = vol.Schema(
             {
                 vol.Optional(CONF_LOADS): EntitySelector(
@@ -162,16 +186,14 @@ class PowerControlOptionsFlow(OptionsFlow):
     # -------------------------------------------------------------- sensors
     async def async_step_sensors(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         loads: list[str] = self.options.get(CONF_LOADS, [])
-        if user_input is not None:
-            if loads:
-                self.options[CONF_LOAD_SENSORS] = {
-                    entity: user_input[key] for key, entity in self._sensor_keys.items() if user_input.get(key)
-                }
-                self.options[CONF_NO_RESTORE] = [e for e in user_input.get(CONF_NO_RESTORE, []) if e in loads]
-            return await self.async_step_init()
-
         if not loads:
-            return self.async_show_form(step_id="sensors", data_schema=vol.Schema({}), errors={"base": "no_loads"})
+            return self.async_abort(reason="no_loads")
+        if user_input is not None:
+            self.options[CONF_LOAD_SENSORS] = {
+                entity: user_input[key] for key, entity in self._sensor_keys.items() if user_input.get(key)
+            }
+            self.options[CONF_NO_RESTORE] = [e for e in user_input.get(CONF_NO_RESTORE, []) if e in loads]
+            return self._async_save()
 
         chosen = self.options.get(CONF_LOAD_SENSORS, {})
         fields: dict[Any, Any] = {}
@@ -200,14 +222,18 @@ class PowerControlOptionsFlow(OptionsFlow):
     # -------------------------------------------------------------- notifications
     async def async_step_notifications(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         if user_input is not None:
-            self.options[CONF_NOTIFY_SERVICES] = user_input.get(CONF_NOTIFY_SERVICES, [])
+            services = user_input.get(CONF_NOTIFY_SERVICES, [])
+            self.options[CONF_NOTIFY_SERVICES] = services
+            self.options[CONF_NOTIFY_PRESENCE] = {
+                k: v for k, v in self.options.get(CONF_NOTIFY_PRESENCE, {}).items() if k in services
+            }
             self.options[CONF_NOTIFY_ONLY_HOME] = user_input.get(CONF_NOTIFY_ONLY_HOME, False)
             self.options[CONF_VOICE_PLAYERS] = user_input.get(CONF_VOICE_PLAYERS, [])
             self.options[CONF_TTS_ENTITY] = user_input.get(CONF_TTS_ENTITY)
             self.options[CONF_VOICE_START] = user_input.get(CONF_VOICE_START, DEFAULT_VOICE_START)
             self.options[CONF_VOICE_END] = user_input.get(CONF_VOICE_END, DEFAULT_VOICE_END)
             self.options[CONF_EVENTS] = user_input.get(CONF_EVENTS, [])
-            return await self.async_step_init()
+            return self._async_save()
         selected = self.options.get(CONF_NOTIFY_SERVICES, [])
         schema = vol.Schema(
             {
@@ -234,11 +260,37 @@ class PowerControlOptionsFlow(OptionsFlow):
             step_id="notifications", data_schema=self.add_suggested_values_to_schema(schema, self.options)
         )
 
+    # -------------------------------------------------------------- presence
+    async def async_step_presence(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        services: list[str] = self.options.get(CONF_NOTIFY_SERVICES, [])
+        if not services:
+            return self.async_abort(reason="no_phones")
+        keys = {f"notify.{service}": service for service in services}
+        if user_input is not None:
+            self.options[CONF_NOTIFY_PRESENCE] = {
+                service: user_input[key] for key, service in keys.items() if user_input.get(key)
+            }
+            return self._async_save()
+        chosen = self.options.get(CONF_NOTIFY_PRESENCE, {})
+        selector = EntitySelector(EntitySelectorConfig(filter=[{"domain": PRESENCE_DOMAINS}]))
+        auto_lines = []
+        for key, service in keys.items():
+            found = auto_presence(self.hass, service)
+            auto_lines.append(f"- {key}: {', '.join(found) if found else '—'}")
+        return self.async_show_form(
+            step_id="presence",
+            data_schema=self.add_suggested_values_to_schema(
+                vol.Schema({vol.Optional(key): selector for key in keys}),
+                {key: chosen[service] for key, service in keys.items() if chosen.get(service)},
+            ),
+            description_placeholders={"auto": "\n".join(auto_lines)},
+        )
+
     # -------------------------------------------------------------- advanced
     async def async_step_advanced(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         if user_input is not None:
             self.options.update(user_input)
-            return await self.async_step_init()
+            return self._async_save()
         defaults = {
             CONF_METER: self.options.get(CONF_METER) or self.config_entry.data[CONF_METER],
             CONF_URGENT_DELAY: DEFAULT_URGENT_DELAY,

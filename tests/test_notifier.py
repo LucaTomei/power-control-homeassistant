@@ -74,3 +74,37 @@ async def test_events_filter_and_language(hass: HomeAssistant) -> None:
     )
     hass.config.language = "en"
     assert notifier.text("warning", power=3500, shed=3300, minutes=2, load=None).startswith("Using 3500 W")
+
+
+async def test_presence_chosen_by_hand(hass: HomeAssistant) -> None:
+    calls = async_mock_service(hass, "notify", "mobile_app_phone")
+    other = async_mock_service(hass, "notify", "telegram")
+    notifier = _notifier(
+        hass,
+        services=["mobile_app_phone", "telegram"],
+        only_home=True,
+        presence={"mobile_app_phone": "binary_sensor.luca_home", "telegram": "person.elisa"},
+    )
+    hass.states.async_set("binary_sensor.luca_home", "off")
+    hass.states.async_set("person.elisa", "not_home")
+    await notifier.async_send("shed", "away")
+    assert (calls, other) == ([], [])
+
+    hass.states.async_set("binary_sensor.luca_home", "on")
+    hass.states.async_set("person.elisa", "home")
+    await notifier.async_send("shed", "home")
+    assert (len(calls), len(other)) == (1, 1)
+
+    # sensor unavailable: notify anyway, never skip by mistake
+    hass.states.async_set("binary_sensor.luca_home", "unavailable")
+    hass.states.async_set("person.elisa", "not_home")
+    await notifier.async_send("shed", "unknown")
+    assert (len(calls), len(other)) == (2, 1)
+
+
+async def test_no_presence_sensor_always_notifies(hass: HomeAssistant) -> None:
+    calls = async_mock_service(hass, "notify", "mobile_app_unknown_phone")
+    notifier = _notifier(hass, services=["mobile_app_unknown_phone"], only_home=True)
+    assert notifier.presence_entities("mobile_app_unknown_phone") == []
+    await notifier.async_send("shed", "x")
+    assert len(calls) == 1

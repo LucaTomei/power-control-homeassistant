@@ -11,13 +11,15 @@
       "user": {
         "data": {
           "contract_kw": "Potenza del contratto",
-          "meter": "Misuratore dei consumi di casa"
+          "meter": "Misuratore dei consumi di casa",
+          "restore_previous": "Ripristina la configurazione precedente"
         },
         "data_description": {
-          "contract_kw": "Serve per proporre le soglie (potrai cambiarle dopo).",
-          "meter": "Il sensore che misura la potenza di tutta la casa, in W o kW."
+          "contract_kw": "La potenza del tuo contratto (es. 3 kW). Serve solo a proporre le soglie: distacco +10%, urgente +30%, ripristino 93%. Puoi cambiarle dopo dalla dashboard.",
+          "meter": "Il sensore con la potenza che tutta la casa sta usando adesso, in W o kW (es. lettore del contatore, Shelly EM, pinza amperometrica). Non un sensore di energia in kWh.",
+          "restore_previous": "Trovata da un'installazione precedente: carichi ({loads}), sensori di consumo, avvisi, soglie e interruttori. Spegni per ripartire da zero."
         },
-        "description": "Power Control spegne i carichi, nell'ordine che scegli tu, prima che salti il contatore, e li riaccende quando i consumi tornano normali.",
+        "description": "Power Control controlla la potenza usata da tutta la casa e, quando supera il limite del contratto, spegne i carichi uno alla volta, nell'ordine che scegli tu, prima che salti il contatore. Quando i consumi tornano normali li riaccende, uno alla volta e solo se c'è posto.\n\nDopo questo passo apri le impostazioni (icona ingranaggio) per scegliere i carichi, i loro sensori di consumo, gli avvisi e i sensori di presenza.",
         "title": "Power Control"
       }
     }
@@ -90,9 +92,6 @@
     }
   },
   "options": {
-    "error": {
-      "no_loads": "Scegli prima i carichi."
-    },
     "step": {
       "advanced": {
         "data": {
@@ -110,28 +109,32 @@
           "restore_delay": "Per quanto i consumi devono restare sotto la soglia di ripristino prima di riaccendere i carichi.",
           "shed_interval": "Il tempo per far aggiornare il misuratore dopo ogni spegnimento o riaccensione.",
           "urgent_delay": "I picchi brevi sopra la soglia urgente (un bollitore che parte) vengono ignorati per questo tempo.",
-          "warning_minutes": "Quanti minuti prima del distacco arriva il preavviso."
+          "warning_minutes": "Quanti minuti prima del distacco arriva il preavviso.",
+          "meter": "Il sensore con la potenza di tutta la casa (W o kW). Cambialo qui se lo sostituisci."
         },
-        "title": "Avanzate"
+        "title": "Avanzate",
+        "description": "Regolazioni fini: i valori predefiniti vanno bene per quasi tutte le case."
       },
       "init": {
         "menu_options": {
-          "advanced": "Avanzate",
           "loads": "Carichi e ordine di spegnimento",
+          "sensors": "Sensori di consumo e riaccensione automatica",
           "notifications": "Avvisi",
-          "save": "Salva e chiudi",
-          "sensors": "Sensori di consumo e riaccensione automatica"
+          "presence": "Presenza in casa (chi riceve gli avvisi)",
+          "advanced": "Avanzate"
         },
-        "title": "Impostazioni di Power Control"
+        "title": "Impostazioni di Power Control",
+        "description": "Ogni sezione viene salvata appena confermi: chiudere questa finestra non fa perdere niente di già confermato.\n\nOrdine consigliato: Carichi → Sensori di consumo → Avvisi → Presenza in casa."
       },
       "loads": {
         "data": {
           "loads": "Carichi"
         },
         "data_description": {
-          "loads": "Trascina per cambiare l'ordine: il primo è il primo a essere spento e l'ultimo a essere riacceso."
+          "loads": "Trascina per cambiare l'ordine: il primo è il primo a essere spento e l'ultimo a essere riacceso. Viene salvato appena confermi; i sensori di consumo sono nella loro sezione."
         },
-        "title": "Carichi e ordine di spegnimento"
+        "title": "Carichi e ordine di spegnimento",
+        "description": "Scegli i dispositivi che Power Control può spegnere: prese smart, interruttori, luci, condizionatori, deumidificatori, scaldabagni, ventilatori… I carichi spenti o in standby vengono saltati."
       },
       "notifications": {
         "data": {
@@ -144,18 +147,35 @@
           "voice_start": "Annunci vocali dalle"
         },
         "data_description": {
-          "notify_only_home": "Un telefono viene saltato quando il suo proprietario è fuori casa.",
-          "voice_players": "Gli Echo usano Alexa Media Player; gli altri altoparlanti hanno bisogno di una sintesi vocale."
+          "notify_only_home": "Se attivo, un telefono viene saltato quando il suo proprietario è fuori casa. Chi è in casa lo dice il sensore scelto in \"Presenza in casa\"; se non ne scegli uno viene trovato in automatico per i telefoni con l'app Companion. Un telefono senza sensore di presenza riceve sempre gli avvisi.",
+          "voice_players": "Gli Echo usano Alexa Media Player; gli altri altoparlanti hanno bisogno di una sintesi vocale.",
+          "notify_services": "I telefoni con l'app Companion di Home Assistant compaiono come notify.mobile_app_nome_telefono; funzionano anche gli altri servizi di notifica.",
+          "notify_events": "Quali eventi mandano un avviso.",
+          "tts_entity": "Serve solo per gli altoparlanti non Alexa (Google, Sonos…), es. tts.google_translate_say o tts.home_assistant_cloud.",
+          "voice_start": "Gli annunci vocali vengono fatti solo in questa fascia oraria; le notifiche sul telefono arrivano sempre.",
+          "voice_end": "Stesso orario dell'inizio = annunci a qualsiasi ora."
         },
-        "title": "Avvisi"
+        "title": "Avvisi",
+        "description": "Dove Power Control manda i suoi messaggi. Ogni messaggio viene anche lanciato come evento power_control_event, per le tue automazioni."
       },
       "sensors": {
         "data": {
           "no_restore": "Non riaccendere mai questi in automatico"
         },
         "description": "Il sensore di consumo di ogni carico: serve a capire se il carico sta davvero consumando e quanto, così viene riacceso solo quando c'è posto. Lascia vuoto per usare quello trovato in automatico:\n{auto}\n\nSu una multipresa con un solo misuratore non viene trovato niente in automatico: sceglilo solo per la presa che conta, oppure lascia vuoto.",
-        "title": "Sensori di consumo e riaccensione automatica"
+        "title": "Sensori di consumo e riaccensione automatica",
+        "data_description": {
+          "no_restore": "Vengono spenti quando serve ma Power Control non li riaccende mai: li riaccendi tu a mano."
+        }
+      },
+      "presence": {
+        "title": "Presenza in casa",
+        "description": "Serve solo se in Avvisi è attivo \"Solo a chi è in casa\".\n\nPer ogni telefono scegli il sensore che dice se il suo proprietario è in casa: una persona (consigliato), un device tracker, oppure un binary sensor / input boolean acceso quando è in casa.\n\nLascia vuoto per usare quello trovato in automatico:\n{auto}\n\nDove non c'è niente (—) quel telefono riceve sempre gli avvisi: non viene filtrato nulla."
       }
+    },
+    "abort": {
+      "no_loads": "Scegli prima i carichi (Carichi e ordine di spegnimento).",
+      "no_phones": "Scegli prima i telefoni (Avvisi)."
     }
   },
   "selector": {

@@ -5,6 +5,7 @@ from __future__ import annotations
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.storage import Store
 
 from .const import (
     ALL_EVENTS,
@@ -17,6 +18,7 @@ from .const import (
     CONF_MIN_ACTIVE_W,
     CONF_NO_RESTORE,
     CONF_NOTIFY_ONLY_HOME,
+    CONF_NOTIFY_PRESENCE,
     CONF_NOTIFY_SERVICES,
     CONF_RESTORE_DELAY,
     CONF_SHED_INTERVAL,
@@ -36,6 +38,8 @@ from .const import (
     DEFAULT_VOICE_END,
     DEFAULT_VOICE_START,
     DEFAULT_WARNING_MINUTES,
+    DOMAIN,
+    STORAGE_VERSION,
     default_thresholds,
 )
 from .engine import PowerControlEngine, Settings
@@ -74,6 +78,7 @@ def build_notifier(hass: HomeAssistant, entry: ConfigEntry) -> Notifier:
         hass,
         services=list(opts.get(CONF_NOTIFY_SERVICES, [])),
         only_home=opts.get(CONF_NOTIFY_ONLY_HOME, True),
+        presence={k: v for k, v in opts.get(CONF_NOTIFY_PRESENCE, {}).items() if v},
         voice_players=list(opts.get(CONF_VOICE_PLAYERS, [])),
         tts_entity=opts.get(CONF_TTS_ENTITY) or None,
         voice_start=opts.get(CONF_VOICE_START, DEFAULT_VOICE_START),
@@ -104,3 +109,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: PowerControlConfigEntry
     if unloaded:
         await entry.runtime_data.async_stop()
     return unloaded
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: PowerControlConfigEntry) -> None:
+    """Integration removed: drop its state (the configuration backup is kept)."""
+    await Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}").async_remove()

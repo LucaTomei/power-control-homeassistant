@@ -71,8 +71,10 @@ class PowerControlSwitch(PowerControlEntity, SwitchEntity, RestoreEntity):
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         self._setter(True)
+        self._engine.async_settings_changed()
         self.async_write_ha_state()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         self._setter(False)
+        self._engine.async_settings_changed()
         self.async_write_ha_state()

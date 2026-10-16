@@ -26,6 +26,7 @@ from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    CONF_CONTRACT_KW,
     DOMAIN,
     EVENT_ALERT,
     EVENT_RESTORE,
@@ -52,6 +53,10 @@ _LOGGER = logging.getLogger(__name__)
 OFF_STATES = {STATE_OFF, "standby"}
 NOT_AVAILABLE = {STATE_UNAVAILABLE, STATE_UNKNOWN}
 
+# Settings changed from the dashboard (numbers), saved with the engine state
+THRESHOLD_ATTRS = ("shed_w", "urgent_w", "restore_w", "delay_minutes")
+SWITCHES = ("enabled", "push", "voice")
+
 
 @dataclass
 class Settings:
@@ -71,6 +76,11 @@ class Settings:
     cancel_delay: float = 60
     warning_minutes: float = 2
     min_active_w: float = 15
+
+
+def backup_store(hass: HomeAssistant) -> Store[dict[str, Any]]:
+    """The whole configuration, kept even if the integration is removed and added again."""
+    return Store(hass, STORAGE_VERSION, f"{DOMAIN}.backup")
 
 
 def power_from_state(state: State | None) -> float | None:
@@ -133,6 +143,8 @@ class PowerControlEngine:
         self.settings = settings
         self.notifier = notifier
         self._store: Store[dict[str, Any]] = Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}")
+        self._backup = backup_store(hass)
+        self._default_thresholds = self._thresholds()  # before the entities restore theirs
 
         self.enabled = True
         self.power: float | None = None
@@ -160,7 +172,23 @@ class PowerControlEngine:
     # ------------------------------------------------------------------ lifecycle
     async def async_start(self) -> None:
         """Restore the saved state and start watching."""
-        data = await self._store.async_load() or {}
+        data = await self._store.async_load()
+        if data is None:
+            # First start of this entry. Set up from scratch: the defaults, not what Home
+            # Assistant restores for the same entity ids. Previous configuration restored at
+            # setup: its thresholds and switches. Otherwise keep what the entities restored.
+            backup = await self._backup.async_load() or {}
+            if backup.get("fresh"):
+                data = {"thresholds": self._default_thresholds, "switches": dict.fromkeys(SWITCHES, True)}
+            else:
+                previous = backup.get("data") if isinstance(backup.get("data"), dict) else {}
+                same_contract = previous.get(CONF_CONTRACT_KW) == self.entry.data.get(CONF_CONTRACT_KW)
+                data = {
+                    "shed": backup.get("shed") or [],  # loads it had switched off and not back on
+                    # a different contract power: the thresholds suggested for it
+                    "thresholds": backup.get("thresholds") if same_contract else self._default_thresholds,
+                    "switches": backup.get("switches"),
+                }
         self.shed = [i for i in data.get("shed", []) if isinstance(i, dict) and i.get("entity_id")]
         if deadline := data.get("deadline"):
             self.deadline = dt_util.parse_datetime(deadline)
@@ -168,12 +196,14 @@ class PowerControlEngine:
         self.last_event = data.get("last_event")
         if last := data.get("last_event_at"):
             self.last_event_at = dt_util.parse_datetime(last)
+        self._apply_saved_settings(data.get("thresholds"), data.get("switches"))
 
         watched = [self.settings.meter, *self.settings.loads]
         watched += [s for s in (self.resolve_sensor(e) for e in self.settings.loads) if s]
         self._unsubs.append(async_track_state_change_event(self.hass, list(dict.fromkeys(watched)), self._on_state))
         self._unsubs.append(async_track_time_interval(self.hass, self._on_tick, timedelta(seconds=TICK_SECONDS)))
         self._started = True
+        self._save()
         self._evaluate()
 
     async def async_stop(self) -> None:
@@ -188,6 +218,7 @@ class PowerControlEngine:
             with contextlib.suppress(asyncio.CancelledError, Exception):
                 await self._task
         await self._store.async_save(self._data())
+        await self._backup.async_save(self._backup_data())
 
     # ------------------------------------------------------------------ listeners
     @callback
@@ -208,6 +239,12 @@ class PowerControlEngine:
             update()
 
     # ------------------------------------------------------------------ persistence
+    def _thresholds(self) -> dict[str, float]:
+        return {attr: getattr(self.settings, attr) for attr in THRESHOLD_ATTRS}
+
+    def _switches(self) -> dict[str, bool]:
+        return {"enabled": self.enabled, "push": self.notifier.push_enabled, "voice": self.notifier.voice_enabled}
+
     def _data(self) -> dict[str, Any]:
         return {
             "shed": self.shed,
@@ -215,11 +252,52 @@ class PowerControlEngine:
             "warned": self._warned,
             "last_event": self.last_event,
             "last_event_at": self.last_event_at.isoformat() if self.last_event_at else None,
+            "thresholds": self._thresholds(),
+            "switches": self._switches(),
         }
+
+    def _backup_data(self) -> dict[str, Any]:
+        return {
+            "data": dict(self.entry.data),
+            "options": dict(self.entry.options),
+            "shed": self.shed,
+            "thresholds": self._thresholds(),
+            "switches": self._switches(),
+        }
+
+    def _apply_saved_settings(self, thresholds: Any, switches: Any) -> None:
+        """Thresholds and switches saved by the engine win over the entities' restored state.
+
+        They are saved at every change, while the restored state is written by Home
+        Assistant only every 15 minutes and on a clean shutdown.
+        """
+        if isinstance(thresholds, dict):
+            values = self._thresholds()
+            for attr in THRESHOLD_ATTRS:
+                if isinstance(thresholds.get(attr), int | float):
+                    values[attr] = float(thresholds[attr])
+            if values["restore_w"] < values["shed_w"] < values["urgent_w"] and values["delay_minutes"] >= 0:
+                for attr, value in values.items():
+                    setattr(self.settings, attr, value)
+        if isinstance(switches, dict):
+            if isinstance(switches.get("enabled"), bool):
+                self.enabled = switches["enabled"]
+            if isinstance(switches.get("push"), bool):
+                self.notifier.push_enabled = switches["push"]
+            if isinstance(switches.get("voice"), bool):
+                self.notifier.voice_enabled = switches["voice"]
 
     @callback
     def _save(self) -> None:
+        if not self._started:
+            return  # still restoring, or stopped: async_start/async_stop save
         self._store.async_delay_save(self._data, 1)
+        self._backup.async_delay_save(self._backup_data, 1)
+
+    @callback
+    def async_settings_changed(self) -> None:
+        """A switch or a threshold changed from the dashboard: save it now."""
+        self._save()
 
     # ------------------------------------------------------------------ helpers
     def _read_meter(self) -> float | None:
@@ -319,6 +397,7 @@ class PowerControlEngine:
     @callback
     def async_refresh(self) -> None:
         """Re-evaluate now (after a setting changed)."""
+        self._save()
         if self.deadline is not None and self._over_since is not None and not self._busy():
             # The delay may have changed: count it from when the consumption went over.
             deadline = self._over_since + timedelta(minutes=self.settings.delay_minutes)
@@ -462,20 +541,22 @@ class PowerControlEngine:
                         break
                     name = self.load_name(entity_id)
                     load_power = self.load_power(entity_id)
-                    snapshot = self._snapshot(entity_id)
+                    item = {
+                        "entity_id": entity_id,
+                        "name": name,
+                        "power": round(load_power) if load_power is not None else None,
+                        "state": self._snapshot(entity_id),
+                        "at": dt_util.utcnow().isoformat(),
+                    }
+                    # Recorded before the command: if this is interrupted (reload, restart)
+                    # the load is still known and will be switched back on.
+                    self.shed.append(item)
+                    self._save()
                     if not await self._async_turn_off(entity_id):
+                        self.shed.remove(item)
+                        self._save()
                         self._failed.add(entity_id)
                         continue
-                    self.shed.append(
-                        {
-                            "entity_id": entity_id,
-                            "name": name,
-                            "power": round(load_power) if load_power is not None else None,
-                            "state": snapshot,
-                            "at": dt_util.utcnow().isoformat(),
-                        }
-                    )
-                    self._save()
                     msg = self.notifier.text(
                         "shed_urgent" if urgent else "shed",
                         power=round(power),
@@ -572,6 +653,7 @@ class PowerControlEngine:
     @callback
     def async_set_enabled(self, enabled: bool) -> None:
         self.enabled = enabled
+        self._save()
         self._evaluate()
 
     # ------------------------------------------------------------------ device control

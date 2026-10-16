@@ -7,8 +7,8 @@ from datetime import time
 import logging
 from typing import Any
 
-from homeassistant.const import STATE_HOME, STATE_UNAVAILABLE, STATE_UNKNOWN
-from homeassistant.core import HomeAssistant
+from homeassistant.const import STATE_HOME, STATE_ON, STATE_UNAVAILABLE, STATE_UNKNOWN
+from homeassistant.core import HomeAssistant, State
 from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util, slugify
 
@@ -57,6 +57,38 @@ KIND_TITLE = {
 }
 
 
+def auto_presence(hass: HomeAssistant, service: str) -> list[str]:
+    """Presence entities of the phone behind notify.<service>, found automatically.
+
+    Works for the Companion app (notify.mobile_app_<phone>): the person using the phone
+    if there is one (it combines all their trackers), otherwise the phone's trackers.
+    Empty when nothing is found.
+    """
+    if not service.startswith("mobile_app_"):
+        return []
+    slug = service.removeprefix("mobile_app_")
+    reg = er.async_get(hass)
+    for entry in hass.config_entries.async_entries("mobile_app"):
+        if slugify(entry.data.get("device_name") or "") != slug:
+            continue
+        trackers = [
+            e.entity_id for e in er.async_entries_for_config_entry(reg, entry.entry_id) if e.domain == "device_tracker"
+        ]
+        if not trackers:
+            return []
+        for person in hass.states.async_all("person"):
+            if set(person.attributes.get("device_trackers", [])) & set(trackers):
+                return [person.entity_id]
+        return trackers
+    return []
+
+
+def _at_home(state: State) -> bool:
+    if state.domain in ("binary_sensor", "input_boolean"):
+        return state.state == STATE_ON
+    return state.state == STATE_HOME
+
+
 def _parse_time(value: str | None, default: time) -> time:
     if not value:
         return default
@@ -73,6 +105,7 @@ class Notifier:
         *,
         services: list[str],
         only_home: bool,
+        presence: dict[str, str] | None = None,
         voice_players: list[str],
         tts_entity: str | None,
         voice_start: str | None,
@@ -82,6 +115,7 @@ class Notifier:
         self.hass = hass
         self.services = services
         self.only_home = only_home
+        self.presence = presence or {}
         self.voice_players = voice_players
         self.tts_entity = tts_entity
         self.voice_start = _parse_time(voice_start, time(9, 0))
@@ -185,34 +219,20 @@ class Notifier:
             return start <= now < end
         return now >= start or now < end  # overnight window
 
-    def is_home(self, service: str) -> bool:
-        """Whether the person owning the phone behind notify.<service> is at home.
+    def presence_entities(self, service: str) -> list[str]:
+        """The presence sensor chosen for notify.<service>, or the ones found automatically."""
+        if chosen := self.presence.get(service):
+            return [chosen]
+        return auto_presence(self.hass, service)
 
-        Unknown phones (not a mobile app, or no tracker) always get the notification.
+    def is_home(self, service: str) -> bool:
+        """Whether the owner of the phone behind notify.<service> is at home.
+
+        A phone without a presence sensor (none chosen and none found), or whose sensor
+        is unknown or unavailable, always gets the notification: never skip by mistake.
         """
-        if not service.startswith("mobile_app_"):
+        states = [self.hass.states.get(e) for e in self.presence_entities(service)]
+        known = [s for s in states if s and s.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE)]
+        if not known:
             return True
-        slug = service.removeprefix("mobile_app_")
-        reg = er.async_get(self.hass)
-        for entry in self.hass.config_entries.async_entries("mobile_app"):
-            if slugify(entry.data.get("device_name") or "") != slug:
-                continue
-            trackers = [
-                e.entity_id
-                for e in er.async_entries_for_config_entry(reg, entry.entry_id)
-                if e.domain == "device_tracker"
-            ]
-            if not trackers:
-                return True
-            # Prefer the person using this phone (combines all their trackers)
-            for person in self.hass.states.async_all("person"):
-                if set(person.attributes.get("device_trackers", [])) & set(trackers):
-                    if person.state in (STATE_UNKNOWN, STATE_UNAVAILABLE):
-                        return True
-                    return person.state == STATE_HOME
-            states = [self.hass.states.get(t) for t in trackers]
-            known = [s for s in states if s and s.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE)]
-            if not known:
-                return True
-            return any(s.state == STATE_HOME for s in known)
-        return True
+        return any(_at_home(s) for s in known)

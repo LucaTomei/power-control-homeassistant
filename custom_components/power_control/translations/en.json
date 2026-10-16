@@ -11,13 +11,15 @@
       "user": {
         "data": {
           "contract_kw": "Contract power",
-          "meter": "House power meter"
+          "meter": "House power meter",
+          "restore_previous": "Restore the previous configuration"
         },
         "data_description": {
-          "contract_kw": "Used to suggest the thresholds (you can change them later).",
-          "meter": "The sensor that measures the power of the whole house, in W or kW."
+          "contract_kw": "The power of your electricity contract (e.g. 3 kW). Used only to suggest the thresholds: switch-off +10%, urgent +30%, restore 93%. You can change them later from the dashboard.",
+          "meter": "Sensor with the power drawn by the whole house right now, in W or kW (e.g. the meter reader, a Shelly EM, a clamp meter). Not an energy sensor in kWh.",
+          "restore_previous": "Found from an earlier installation: loads ({loads}), power sensors, notifications, thresholds and switches. Turn off to start from scratch."
         },
-        "description": "Power Control switches loads off, in the order you choose, before the meter trips, and switches them back on when consumption is normal again.",
+        "description": "Power Control watches the power used by the whole house and, when it goes over the limit of your contract, switches loads off one at a time, in the order you choose, before the meter trips. When consumption is back to normal it switches them back on, one at a time and only if they fit.\n\nAfter this step open the settings (cog icon) to choose the loads, their power sensors, the notifications and the presence sensors.",
         "title": "Power Control"
       }
     }
@@ -90,9 +92,6 @@
     }
   },
   "options": {
-    "error": {
-      "no_loads": "Choose the loads first."
-    },
     "step": {
       "advanced": {
         "data": {
@@ -110,28 +109,32 @@
           "restore_delay": "How long consumption must stay below the restore threshold before switching loads back on.",
           "shed_interval": "Time to let the meter update after each switch-off or switch-on.",
           "urgent_delay": "Short peaks above the urgent threshold (a kettle starting) are ignored for this long.",
-          "warning_minutes": "Minutes before the switch-off when the warning is sent."
+          "warning_minutes": "Minutes before the switch-off when the warning is sent.",
+          "meter": "The sensor with the power of the whole house (W or kW). Change it here if you replace it."
         },
-        "title": "Advanced"
+        "title": "Advanced",
+        "description": "Fine-tuning: the defaults suit most homes."
       },
       "init": {
         "menu_options": {
-          "advanced": "Advanced",
           "loads": "Loads and switch-off order",
+          "sensors": "Power sensors and automatic restore",
           "notifications": "Notifications",
-          "save": "Save and close",
-          "sensors": "Power sensors and automatic restore"
+          "presence": "Presence at home (who gets notified)",
+          "advanced": "Advanced"
         },
-        "title": "Power Control settings"
+        "title": "Power Control settings",
+        "description": "Each section is saved as soon as you confirm it: closing this window loses nothing already confirmed.\n\nSuggested order: Loads → Power sensors → Notifications → Presence at home."
       },
       "loads": {
         "data": {
           "loads": "Loads"
         },
         "data_description": {
-          "loads": "Drag to change the order: the first one is the first to be switched off, and the last one to be switched back on."
+          "loads": "Drag to change the order: the first is the first to be switched off and the last to be switched back on. Saved as soon as you confirm; the power sensors are in their own section."
         },
-        "title": "Loads and switch-off order"
+        "title": "Loads and switch-off order",
+        "description": "Choose the devices Power Control may switch off: smart plugs, switches, lights, air conditioners, dehumidifiers, water heaters, fans… Loads that are off or in standby are skipped."
       },
       "notifications": {
         "data": {
@@ -144,18 +147,35 @@
           "voice_start": "Voice announcements from"
         },
         "data_description": {
-          "notify_only_home": "A phone is skipped when its owner is away.",
-          "voice_players": "Alexa devices use Alexa Media Player; other speakers need a text-to-speech engine."
+          "notify_only_home": "When on, a phone is skipped while its owner is away. Who is at home comes from the sensor chosen in \"Presence at home\"; if none is chosen it is found automatically for Companion app phones. A phone with no presence sensor always gets the notifications.",
+          "voice_players": "Alexa devices use Alexa Media Player; other speakers need a text-to-speech engine.",
+          "notify_services": "Phones with the Home Assistant Companion app appear as notify.mobile_app_phone_name; other notification services work too.",
+          "notify_events": "Which events send a notification.",
+          "tts_entity": "Needed only for speakers that are not Alexa (Google, Sonos…), e.g. tts.google_translate_say or tts.home_assistant_cloud.",
+          "voice_start": "Voice announcements are made only in this time window; phone notifications always arrive.",
+          "voice_end": "Same time as the start = announcements at any time."
         },
-        "title": "Notifications"
+        "title": "Notifications",
+        "description": "Where Power Control sends its messages. Every message is also fired as the power_control_event event, for your own automations."
       },
       "sensors": {
         "data": {
           "no_restore": "Never switch these back on automatically"
         },
         "description": "Power sensor of each load: it tells whether the load is really drawing power and how much, so it is switched back on only when it fits. Leave empty to use the one found automatically:\n{auto}\n\nOn a multi-socket strip with a single meter nothing is found automatically: choose it only for the socket that matters, or leave it empty.",
-        "title": "Power sensors and automatic restore"
+        "title": "Power sensors and automatic restore",
+        "data_description": {
+          "no_restore": "Switched off when needed but never switched back on by Power Control: you switch them on by hand."
+        }
+      },
+      "presence": {
+        "title": "Presence at home",
+        "description": "Used only when \"Only to people at home\" is on in Notifications.\n\nFor each phone choose the sensor telling whether its owner is at home: a person (recommended), a device tracker, or a binary sensor / input boolean that is on when at home.\n\nLeave it empty to use the one found automatically:\n{auto}\n\nWhere there is none (—) that phone always gets the notifications: nothing is filtered."
       }
+    },
+    "abort": {
+      "no_loads": "Choose the loads first (Loads and switch-off order).",
+      "no_phones": "Choose the phones first (Notifications)."
     }
   },
   "selector": {
