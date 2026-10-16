@@ -44,6 +44,7 @@ from .const import (
     STATUS_WARNING,
     STORAGE_VERSION,
     TICK_SECONDS,
+    URGENT_WARNING_COOLDOWN,
 )
 from .notifier import Notifier
 
@@ -70,12 +71,18 @@ class Settings:
     urgent_w: float = 3900
     restore_w: float = 2800
     delay_minutes: float = 60
-    urgent_delay: float = 10
+    urgent_delay: float = 60
     shed_interval: float = 20
     restore_delay: float = 60
     cancel_delay: float = 60
     warning_minutes: float = 2
     min_active_w: float = 15
+
+
+def duration_text(seconds: float) -> str:
+    """60 -> "1 min", 90 -> "90 s"."""
+    seconds = round(seconds)
+    return f"{seconds // 60} min" if seconds >= 60 and seconds % 60 == 0 else f"{seconds} s"
 
 
 def backup_store(hass: HomeAssistant) -> Store[dict[str, Any]]:
@@ -157,6 +164,7 @@ class PowerControlEngine:
         self._warned = False
         self._over_since: datetime | None = None
         self._urgent_since: datetime | None = None
+        self._urgent_warned_at: datetime | None = None
         self._below_since: datetime | None = None
         self._restore_since: datetime | None = None
         self._no_load_alerted = False
@@ -435,6 +443,8 @@ class PowerControlEngine:
         if power > s.urgent_w:
             if self._urgent_since is None:
                 self._urgent_since = now
+                if s.urgent_delay > 0:
+                    self._warn_urgent(power, now)
             if (now - self._urgent_since).total_seconds() >= s.urgent_delay and (
                 self.next_load_to_shed() or not self._no_load_alerted
             ):
@@ -520,6 +530,25 @@ class PowerControlEngine:
         )
         self._record(msg)
         self._send(EVENT_WARNING, msg)
+
+    @callback
+    def _warn_urgent(self, power: float, now: datetime) -> None:
+        """Above the urgent threshold: say at once what will be switched off if it stays there."""
+        nxt = self.next_load_to_shed()
+        if nxt is None:
+            return  # nothing to switch off: the alert comes when the delay is over
+        if self._urgent_warned_at and (now - self._urgent_warned_at).total_seconds() < URGENT_WARNING_COOLDOWN:
+            return
+        self._urgent_warned_at = now
+        msg = self.notifier.text(
+            "urgent_warning",
+            power=round(power),
+            urgent=round(self.settings.urgent_w),
+            delay=duration_text(self.settings.urgent_delay),
+            load=self.load_name(nxt),
+        )
+        self._record(msg)
+        self._send(EVENT_WARNING, msg, critical=True)
 
     async def _async_shed(self, urgent: bool) -> None:
         async with self._lock:

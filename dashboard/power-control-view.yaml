@@ -169,7 +169,7 @@
             - entity: number.power_control_shed_delay
               name: …per più di
             - entity: number.power_control_urgent_threshold
-              name: Spegni subito sopra
+              name: Soglia urgente (avvisa subito)
             - entity: number.power_control_restore_threshold
               name: Riaccendi sotto
             - type: divider

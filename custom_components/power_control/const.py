@@ -42,7 +42,8 @@ BUS_EVENT: Final = "power_control_event"
 
 DEFAULT_CONTRACT_KW: Final = 3.0
 DEFAULT_DELAY_MINUTES: Final = 60  # meter tolerates up to +33% for ~180 min
-DEFAULT_URGENT_DELAY: Final = 10  # s above the urgent threshold before acting
+DEFAULT_URGENT_DELAY: Final = 60  # s above the urgent threshold before acting (warned at once)
+URGENT_WARNING_COOLDOWN: Final = 300  # s, a load hovering around the urgent threshold warns once
 DEFAULT_SHED_INTERVAL: Final = 20  # s between two switch-offs / switch-ons
 DEFAULT_RESTORE_DELAY: Final = 60  # s below the restore threshold before restoring
 DEFAULT_CANCEL_DELAY: Final = 60  # s below the threshold before cancelling the countdown

@@ -503,3 +503,50 @@ async def test_failed_switch_off_is_not_recorded(
     hass.services.async_register("light", "turn_off", broken)
     await advance(hass, engine, freezer, minutes=61)
     assert engine.shed == []
+
+
+async def test_urgent_threshold_warns_at_once_and_waits(
+    hass: HomeAssistant, house: House, freezer: FrozenDateTimeFactory
+) -> None:
+    """Above the urgent threshold: a notification at once, the switch-off only if it stays there."""
+    hass.config.language = "it"
+    oven = house.add_plug("forno", 3600)
+    house.set_base(100)
+    engine = await setup(hass, house, [oven], urgent_delay=60)
+
+    def urgent_warnings() -> list[dict[str, Any]]:
+        return [d for _, d in house.notifications if "entro" in d["message"]]
+
+    house.set_base(400)  # 4000 W > 3900 W
+    await advance(hass, engine, freezer, seconds=1)
+    assert len(urgent_warnings()) == 1
+    warning = urgent_warnings()[0]
+    assert warning["message"] == (
+        "Consumo 4000 W, sopra il limite urgente di 3900 W: se non scende entro 1 min spengo forno."
+    )
+    assert warning["data"]["push"]["interruption-level"] == "time-sensitive"
+    await advance(hass, engine, freezer, seconds=30)
+    assert house.off_calls() == []
+
+    house.set_base(200)  # 3800 W: back under the urgent threshold, the minute starts again
+    await advance(hass, engine, freezer, seconds=40)
+    assert house.off_calls() == []
+
+    house.set_base(400)  # over again shortly after: no second notification
+    await advance(hass, engine, freezer, seconds=59)
+    assert house.off_calls() == []
+    assert len(urgent_warnings()) == 1
+    await advance(hass, engine, freezer, seconds=2)
+    assert house.off_calls() == [oven]
+    assert "ho spento forno" in house.notifications[-1][1]["message"]
+
+
+async def test_urgent_warning_not_sent_with_nothing_to_switch_off(
+    hass: HomeAssistant, house: House, freezer: FrozenDateTimeFactory
+) -> None:
+    house.set_base(4000)
+    engine = await setup(hass, house, [house.add_plug("forno", 1000, on=False)], urgent_delay=60)
+    await advance(hass, engine, freezer, seconds=1)
+    assert house.notifications == []
+    await advance(hass, engine, freezer, seconds=61)
+    assert [d["title"] for _, d in house.notifications] == ["🚨 Risk of power cut"]

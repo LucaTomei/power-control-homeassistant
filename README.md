@@ -23,7 +23,7 @@ cards needed.
 - 🔌 **Any plug or appliance**: Zigbee (Zigbee2MQTT, ZHA), Shelly, Tuya, Wi-Fi plugs, air conditioners, dehumidifiers, lights, fans, water heaters
 - 🔍 **Power sensor found automatically** on the plug's own device; choose it by hand for multi-socket strips
 - 💤 **Idle loads are skipped**: a TV in standby is not switched off for nothing
-- ⏱️ **Two thresholds like a real meter**: a delayed one (the meter tolerates a small overload for a while) and an urgent one (acts within seconds)
+- ⏱️ **Two thresholds like a real meter**: a delayed one (the meter tolerates a small overload for a while) and an urgent one (notifies at once, switches off after 1 minute only if consumption is still over it)
 - ✅ **Smart restore**: a load is switched back on only if its last measured power fits under the threshold
 - ❄️ **Air conditioners get their mode back** (heat stays heat, cool stays cool)
 - 🙋 **Switched on by hand?** It is removed from the list, it will not be touched again
@@ -41,7 +41,7 @@ consumption > switch-off threshold ─┬─ countdown starts (switch-off delay)
                                     ├─ warning a few minutes before the end
                                     └─ end of countdown: switch off the first active load
                                          └─ wait, measure again, next one … until under the threshold
-consumption > urgent threshold for a few seconds ─── switch off immediately, same order
+consumption > urgent threshold ─── notification at once; still over it after 1 min: switch off, same order
 consumption < restore threshold for a while ─── switch back on, last switched-off first,
                                                 one at a time, only if it fits
 ```
@@ -165,7 +165,7 @@ Si configura tutto da Home Assistant, senza YAML.
 - **Qualsiasi presa o elettrodomestico**: Zigbee (Zigbee2MQTT, ZHA), Shelly, Tuya, prese Wi-Fi, condizionatori, deumidificatori, luci.
 - **Sensore di consumo trovato da solo** sul dispositivo della presa; sulle multiprese con un solo misuratore lo scegli tu.
 - **Salta i carichi in standby** (sotto 15 W, regolabile).
-- **Due soglie come il contatore**: una con ritardo (il contatore tollera un piccolo sforamento per un po') e una urgente (interviene in pochi secondi).
+- **Due soglie come il contatore**: una con ritardo (il contatore tollera un piccolo sforamento per un po') e una urgente (avvisa subito e, se dopo 1 minuto i consumi sono ancora sopra, spegne).
 - **Riaccensione intelligente**: riaccende un carico solo se il suo consumo ci sta sotto la soglia.
 - **I condizionatori tornano nella modalità di prima** (caldo resta caldo).
 - **Riacceso a mano?** Esce dalla lista, non viene più toccato.

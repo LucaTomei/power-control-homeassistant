@@ -77,7 +77,7 @@ async def test_templates_render_in_every_situation(hass: HomeAssistant, freezer:
     texts = _render_all(hass)
     assert any("Carichi spenti per i consumi" in t and "lavatrice" in t for t in texts)
     assert any("⛔ spento da Power Control" in t for t in texts)
-    assert any("Ultimo evento" in t and "spento subito lavatrice" in t for t in texts)  # 4100 W > urgent
+    assert any("Ultimo evento" in t and "ho spento lavatrice" in t for t in texts)  # 4100 W > urgent
 
     house.loads[washer].on = False
     hass.states.async_set(washer, "unavailable")

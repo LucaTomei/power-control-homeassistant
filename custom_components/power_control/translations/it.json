@@ -100,7 +100,7 @@
           "min_active_w": "Ignora i carichi che consumano meno di",
           "restore_delay": "Attesa prima di riaccendere",
           "shed_interval": "Pausa tra un carico e l'altro",
-          "urgent_delay": "Soglia urgente: intervieni dopo",
+          "urgent_delay": "Soglia urgente: spegni dopo",
           "warning_minutes": "Preavviso prima del distacco"
         },
         "data_description": {
@@ -108,7 +108,7 @@
           "min_active_w": "Un carico acceso che consuma meno di così (standby) viene saltato.",
           "restore_delay": "Per quanto i consumi devono restare sotto la soglia di ripristino prima di riaccendere i carichi.",
           "shed_interval": "Il tempo per far aggiornare il misuratore dopo ogni spegnimento o riaccensione.",
-          "urgent_delay": "I picchi brevi sopra la soglia urgente (un bollitore che parte) vengono ignorati per questo tempo.",
+          "urgent_delay": "Appena i consumi superano la soglia urgente arriva subito un avviso; il primo carico viene spento solo se i consumi restano sopra per tutto questo tempo (se scendono, il conteggio riparte). I picchi brevi, come un bollitore o un forno che scalda, vengono ignorati.",
           "warning_minutes": "Quanti minuti prima del distacco arriva il preavviso.",
           "meter": "Il sensore con la potenza di tutta la casa (W o kW). Cambialo qui se lo sostituisci."
         },

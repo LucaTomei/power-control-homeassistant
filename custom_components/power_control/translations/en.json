@@ -100,7 +100,7 @@
           "min_active_w": "Ignore loads drawing less than",
           "restore_delay": "Wait before switching back on",
           "shed_interval": "Pause between two loads",
-          "urgent_delay": "Urgent threshold: act after",
+          "urgent_delay": "Urgent threshold: switch off after",
           "warning_minutes": "Warning before the switch-off"
         },
         "data_description": {
@@ -108,7 +108,7 @@
           "min_active_w": "A load that is on but draws less than this (standby) is skipped.",
           "restore_delay": "How long consumption must stay below the restore threshold before switching loads back on.",
           "shed_interval": "Time to let the meter update after each switch-off or switch-on.",
-          "urgent_delay": "Short peaks above the urgent threshold (a kettle starting) are ignored for this long.",
+          "urgent_delay": "As soon as consumption goes over the urgent threshold a notification is sent at once; the first load is switched off only if consumption stays over it for all this time (if it drops, the count starts again). Short peaks, like a kettle or an oven heating up, are ignored.",
           "warning_minutes": "Minutes before the switch-off when the warning is sent.",
           "meter": "The sensor with the power of the whole house (W or kW). Change it here if you replace it."
         },
