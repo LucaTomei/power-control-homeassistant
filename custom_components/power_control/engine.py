@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Coroutine
+import contextlib
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 import logging
+import math
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -78,6 +80,8 @@ def power_from_state(state: State | None) -> float | None:
     try:
         value = float(state.state)
     except (TypeError, ValueError):
+        return None
+    if not math.isfinite(value):
         return None
     unit = state.attributes.get(ATTR_UNIT_OF_MEASUREMENT)
     if unit == "kW":
@@ -180,6 +184,9 @@ class PowerControlEngine:
         self._unsubs.clear()
         if self._task and not self._task.done():
             self._task.cancel()
+            # Let it clean up now, so its delayed save cannot overwrite the final one
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                await self._task
         await self._store.async_save(self._data())
 
     # ------------------------------------------------------------------ listeners
@@ -277,6 +284,13 @@ class PowerControlEngine:
         self.last_event_at = dt_util.utcnow()
         self._save()
 
+    @callback
+    def _send(self, kind: str, message: str, critical: bool = False) -> None:
+        """Notify in the background: a slow phone or speaker must not delay a switch-off."""
+        self.entry.async_create_background_task(
+            self.hass, self.notifier.async_send(kind, message, critical=critical), f"{DOMAIN}_notify"
+        )
+
     # ------------------------------------------------------------------ state machine
     @callback
     def _on_state(self, event: Event[EventStateChangedData]) -> None:
@@ -368,7 +382,7 @@ class PowerControlEngine:
                 self._warned = True
                 self._save()
                 if can_act:
-                    self._start(self._async_warn(power), "warning")
+                    self._warn(power)
         else:
             self._over_since = None
             self._no_load_alerted = False
@@ -413,7 +427,8 @@ class PowerControlEngine:
         return self._status
 
     # ------------------------------------------------------------------ actions
-    async def _async_warn(self, power: float) -> None:
+    @callback
+    def _warn(self, power: float) -> None:
         s = self.settings
         minutes_left = max(0, round((self.deadline - dt_util.utcnow()).total_seconds() / 60)) if self.deadline else 0
         nxt = self.next_load_to_shed()
@@ -425,8 +440,7 @@ class PowerControlEngine:
             load=self.load_name(nxt) if nxt else None,
         )
         self._record(msg)
-        await self.notifier.async_send(EVENT_WARNING, msg)
-        self._notify_listeners()
+        self._send(EVENT_WARNING, msg)
 
     async def _async_shed(self, urgent: bool) -> None:
         async with self._lock:
@@ -434,7 +448,7 @@ class PowerControlEngine:
             self._update_status()
             s = self.settings
             try:
-                while True:
+                while self.enabled:
                     power = self._read_meter()
                     if power is None or power <= s.shed_w:
                         break
@@ -444,7 +458,7 @@ class PowerControlEngine:
                             self._no_load_alerted = True
                             msg = self.notifier.text("alert", power=round(power), shed=round(s.shed_w))
                             self._record(msg)
-                            await self.notifier.async_send(EVENT_ALERT, msg, critical=True)
+                            self._send(EVENT_ALERT, msg, critical=True)
                         break
                     name = self.load_name(entity_id)
                     load_power = self.load_power(entity_id)
@@ -471,7 +485,7 @@ class PowerControlEngine:
                         load_power=round(load_power) if load_power is not None else None,
                     )
                     self._record(msg)
-                    await self.notifier.async_send(EVENT_SHED, msg, critical=urgent)
+                    self._send(EVENT_SHED, msg, critical=urgent)
                     self._notify_listeners()
                     await asyncio.sleep(s.shed_interval)
             finally:
@@ -491,7 +505,7 @@ class PowerControlEngine:
             s = self.settings
             skipped: list[str] = []
             try:
-                while self.shed:
+                while self.shed and (force or self.enabled):
                     item = self.shed[-1]  # last switched off, first switched back on
                     entity_id = item["entity_id"]
                     state = self.hass.states.get(entity_id)
@@ -524,14 +538,14 @@ class PowerControlEngine:
                         load=item.get("name") or entity_id,
                     )
                     self._record(msg)
-                    await self.notifier.async_send(EVENT_RESTORE, msg)
+                    self._send(EVENT_RESTORE, msg)
                     self._notify_listeners()
                     if self.shed:
                         await asyncio.sleep(s.shed_interval)
                 if skipped:
                     msg = self.notifier.text("restore_skipped", loads=", ".join(skipped))
                     self._record(msg)
-                    await self.notifier.async_send(EVENT_RESTORE, msg)
+                    self._send(EVENT_RESTORE, msg)
             finally:
                 if not self.shed:
                     self._no_load_alerted = False

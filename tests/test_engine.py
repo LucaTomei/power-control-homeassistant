@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import timedelta
 from typing import Any
 
@@ -9,7 +10,7 @@ from freezegun.api import FrozenDateTimeFactory
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import entity_registry as er
 
@@ -353,3 +354,59 @@ async def test_late_confirmation_does_not_lose_the_load(
     house.switch(washer, True)  # now someone really switches it on
     await hass.async_block_till_done()
     assert engine.shed == []
+
+
+async def test_disabling_stops_a_running_switch_off(
+    hass: HomeAssistant, house: House, freezer: FrozenDateTimeFactory
+) -> None:
+    washer = house.add_plug("lavatrice", 1000)
+    dryer = house.add_plug("asciugatrice", 1000)
+    house.set_base(2500)  # 4500 W: one load off is not enough
+    engine = await setup(hass, house, [washer, dryer])
+
+    @callback
+    def disable_on_first_switch_off(event) -> None:
+        if event.data["entity_id"] == washer and event.data["new_state"].state == "off":
+            engine.async_set_enabled(False)
+
+    hass.bus.async_listen("state_changed", disable_on_first_switch_off)
+    await advance(hass, engine, freezer, minutes=61)
+    assert house.off_calls() == [washer]
+    assert engine.status == "disabled"
+
+
+async def test_meter_not_a_number_is_unavailable(hass: HomeAssistant, house: House) -> None:
+    engine = await setup(hass, house, [])
+    hass.states.async_set(METER, "nan", {"unit_of_measurement": "W"})
+    await run(hass, engine)
+    assert engine.power is None
+    assert engine.status == "meter_unavailable"
+
+
+async def test_slow_notification_does_not_block_the_engine(
+    hass: HomeAssistant, house: House, freezer: FrozenDateTimeFactory
+) -> None:
+    release = asyncio.Event()
+
+    async def stuck(call) -> None:
+        await release.wait()
+
+    hass.services.async_register("notify", "mobile_app_slow_phone", stuck)
+    washer = house.add_plug("lavatrice", 2000)
+    house.set_base(1800)
+    engine = await setup(hass, house, [washer], notify_services=["mobile_app_slow_phone"])
+    await hass.async_block_till_done()
+    freezer.tick(timedelta(minutes=58))
+    engine._evaluate()
+    await hass.async_block_till_done()
+    assert engine.status == "warning"
+    house.set_base(2500)  # now above the urgent threshold
+    freezer.tick(timedelta(seconds=11))
+    engine._evaluate()
+    await hass.async_block_till_done()
+    freezer.tick(timedelta(seconds=11))
+    engine._evaluate()
+    await hass.async_block_till_done()
+    assert house.off_calls() == [washer]
+    release.set()
+    await hass.async_block_till_done(wait_background_tasks=True)

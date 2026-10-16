@@ -89,6 +89,7 @@ class Notifier:
         self.events = set(events)
         self.push_enabled = True
         self.voice_enabled = True
+        self._lock = asyncio.Lock()  # one message at a time, in order
 
     # ------------------------------------------------------------------ texts
     def _lang(self) -> str:
@@ -115,6 +116,10 @@ class Notifier:
         self.hass.bus.async_fire(BUS_EVENT, {"type": kind, "title": title, "message": message})
         if kind not in self.events:
             return
+        async with self._lock:
+            await self._async_deliver(title, message, critical)
+
+    async def _async_deliver(self, title: str, message: str, critical: bool) -> None:
         if self.push_enabled:
             for service in self.services:
                 if self.only_home and not self.is_home(service):
