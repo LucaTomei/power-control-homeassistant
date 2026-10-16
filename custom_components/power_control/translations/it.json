@@ -1,0 +1,171 @@
+{
+  "config": {
+    "abort": {
+      "already_configured": "Power Control è già configurato.",
+      "single_instance_allowed": "Power Control è già configurato."
+    },
+    "error": {
+      "meter_not_found": "Questo sensore non esiste."
+    },
+    "step": {
+      "user": {
+        "data": {
+          "contract_kw": "Potenza del contratto",
+          "meter": "Misuratore dei consumi di casa"
+        },
+        "data_description": {
+          "contract_kw": "Serve per proporre le soglie (potrai cambiarle dopo).",
+          "meter": "Il sensore che misura la potenza di tutta la casa, in W o kW."
+        },
+        "description": "Power Control spegne i carichi, nell'ordine che scegli tu, prima che salti il contatore, e li riaccende quando i consumi tornano normali.",
+        "title": "Power Control"
+      }
+    }
+  },
+  "entity": {
+    "button": {
+      "forget_loads_off": {
+        "name": "Dimentica i carichi spenti"
+      },
+      "restore_now": {
+        "name": "Riaccendi ora i carichi spenti"
+      }
+    },
+    "number": {
+      "restore_threshold": {
+        "name": "Soglia di ripristino"
+      },
+      "shed_delay": {
+        "name": "Ritardo distacco"
+      },
+      "shed_threshold": {
+        "name": "Soglia di distacco"
+      },
+      "urgent_threshold": {
+        "name": "Soglia urgente"
+      }
+    },
+    "sensor": {
+      "headroom": {
+        "name": "Margine"
+      },
+      "last_event": {
+        "name": "Ultimo evento"
+      },
+      "loads_off": {
+        "name": "Carichi spenti"
+      },
+      "shed_at": {
+        "name": "Distacco alle"
+      },
+      "status": {
+        "name": "Stato",
+        "state": {
+          "disabled": "Disattivato",
+          "loads_off": "Carichi spenti",
+          "meter_unavailable": "Misuratore non disponibile",
+          "ok": "Tutto ok",
+          "over_threshold": "Sopra la soglia",
+          "restoring": "Riaccensione in corso",
+          "shedding": "Spegnimento in corso",
+          "warning": "Distacco imminente"
+        }
+      }
+    },
+    "switch": {
+      "enabled": {
+        "name": "Controllo carichi"
+      },
+      "push_notifications": {
+        "name": "Avvisi sul telefono"
+      },
+      "voice_notifications": {
+        "name": "Annunci vocali"
+      }
+    }
+  },
+  "exceptions": {
+    "invalid_thresholds": {
+      "message": "Le soglie devono essere: ripristino ({restore} W) < distacco ({shed} W) < urgente ({urgent} W)."
+    }
+  },
+  "options": {
+    "error": {
+      "no_loads": "Scegli prima i carichi."
+    },
+    "step": {
+      "advanced": {
+        "data": {
+          "cancel_delay": "Annulla il conto alla rovescia dopo",
+          "meter": "Misuratore dei consumi di casa",
+          "min_active_w": "Ignora i carichi che consumano meno di",
+          "restore_delay": "Attesa prima di riaccendere",
+          "shed_interval": "Pausa tra un carico e l'altro",
+          "urgent_delay": "Soglia urgente: intervieni dopo",
+          "warning_minutes": "Preavviso prima del distacco"
+        },
+        "data_description": {
+          "cancel_delay": "Per quanto i consumi devono restare sotto la soglia di distacco per annullare un conto alla rovescia già partito.",
+          "min_active_w": "Un carico acceso che consuma meno di così (standby) viene saltato.",
+          "restore_delay": "Per quanto i consumi devono restare sotto la soglia di ripristino prima di riaccendere i carichi.",
+          "shed_interval": "Il tempo per far aggiornare il misuratore dopo ogni spegnimento o riaccensione.",
+          "urgent_delay": "I picchi brevi sopra la soglia urgente (un bollitore che parte) vengono ignorati per questo tempo.",
+          "warning_minutes": "Quanti minuti prima del distacco arriva il preavviso."
+        },
+        "title": "Avanzate"
+      },
+      "init": {
+        "menu_options": {
+          "advanced": "Avanzate",
+          "loads": "Carichi e ordine di spegnimento",
+          "notifications": "Avvisi",
+          "save": "Salva e chiudi",
+          "sensors": "Sensori di consumo e riaccensione automatica"
+        },
+        "title": "Impostazioni di Power Control"
+      },
+      "loads": {
+        "data": {
+          "loads": "Carichi"
+        },
+        "data_description": {
+          "loads": "Trascina per cambiare l'ordine: il primo è il primo a essere spento e l'ultimo a essere riacceso."
+        },
+        "title": "Carichi e ordine di spegnimento"
+      },
+      "notifications": {
+        "data": {
+          "notify_events": "Avvisa quando",
+          "notify_only_home": "Solo a chi è in casa",
+          "notify_services": "Telefoni e servizi di notifica",
+          "tts_entity": "Sintesi vocale (per altoparlanti non Alexa)",
+          "voice_end": "Annunci vocali fino alle",
+          "voice_players": "Altoparlanti per gli annunci vocali",
+          "voice_start": "Annunci vocali dalle"
+        },
+        "data_description": {
+          "notify_only_home": "Un telefono viene saltato quando il suo proprietario è fuori casa.",
+          "voice_players": "Gli Echo usano Alexa Media Player; gli altri altoparlanti hanno bisogno di una sintesi vocale."
+        },
+        "title": "Avvisi"
+      },
+      "sensors": {
+        "data": {
+          "no_restore": "Non riaccendere mai questi in automatico"
+        },
+        "description": "Il sensore di consumo di ogni carico: serve a capire se il carico sta davvero consumando e quanto, così viene riacceso solo quando c'è posto. Lascia vuoto per usare quello trovato in automatico:\n{auto}\n\nSu una multipresa con un solo misuratore non viene trovato niente in automatico: sceglilo solo per la presa che conta, oppure lascia vuoto.",
+        "title": "Sensori di consumo e riaccensione automatica"
+      }
+    }
+  },
+  "selector": {
+    "events": {
+      "options": {
+        "alert": "Non c'è più niente da spegnere",
+        "restore": "Un carico viene riacceso",
+        "shed": "Un carico viene spento",
+        "warning": "Preavviso prima del distacco"
+      }
+    }
+  }
+}

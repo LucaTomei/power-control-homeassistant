@@ -1,0 +1,15 @@
+{
+  "domain": "power_control",
+  "name": "Power Control",
+  "codeowners": [
+    "@LucaTomei"
+  ],
+  "config_flow": true,
+  "documentation": "https://github.com/LucaTomei/power-control-homeassistant",
+  "integration_type": "service",
+  "iot_class": "calculated",
+  "issue_tracker": "https://github.com/LucaTomei/power-control-homeassistant/issues",
+  "requirements": [],
+  "single_config_entry": true,
+  "version": "1.0.0"
+}

@@ -1,0 +1,27 @@
+# Avviso da mettere in cima alla vista principale: compare solo quando servono.
+- type: conditional
+  conditions:
+    - condition: state
+      entity: sensor.power_control_status
+      state:
+        - shedding
+        - warning
+        - over_threshold
+        - loads_off
+  card:
+    type: markdown
+    content: |
+      {% set s = states('sensor.power_control_status') %}
+      {% set p = state_attr('sensor.power_control_status', 'power') %}
+      {% set t = states('sensor.power_control_shed_at') %}
+      {% set nxt = state_attr('sensor.power_control_status', 'next_to_switch_off') %}
+      {% if s == 'shedding' %}
+      ## ⚡ Sto spegnendo dei carichi
+      Consumo {{ p }} W: spengo in ordine per non far saltare il contatore.
+      {% elif s in ['warning', 'over_threshold'] %}
+      ## ⚡ Consumi alti: {{ p }} W
+      {% if t not in ['unknown', 'unavailable'] %}Se non spegni qualcosa, alle **{{ as_timestamp(t) | timestamp_custom('%H:%M') }}** spengo **{{ nxt or 'i carichi' }}**.{% endif %}
+      {% elif s == 'loads_off' %}
+      ## ⛔ Carichi spenti per i consumi
+      {{ state_attr('sensor.power_control_loads_off', 'loads') | join(', ') }}: li riaccendo appena c'è posto.
+      {% endif %}

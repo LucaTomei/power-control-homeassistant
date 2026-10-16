@@ -1,0 +1,209 @@
+# Power Control: vista per la dashboard (Modifica dashboard → ⋮ → Editor di configurazione testuale → incolla sotto `views:`)
+# Sostituisci sensor.YOUR_HOUSE_POWER con il misuratore di casa.
+- type: sections
+  title: Consumi
+  path: consumi
+  icon: mdi:flash
+  max_columns: 3
+  badges:
+    - type: entity
+      entity: sensor.YOUR_HOUSE_POWER
+      name: Adesso
+      icon: mdi:flash
+      show_name: true
+    - type: entity
+      entity: sensor.power_control_status
+      name: Power Control
+      show_name: true
+      show_state: true
+  sections:
+    - type: grid
+      cards:
+        - type: heading
+          heading: Power Control
+          icon: mdi:shield-home
+        - type: conditional
+          conditions:
+            - condition: state
+              entity: sensor.power_control_status
+              state:
+                - shedding
+                - warning
+                - over_threshold
+                - loads_off
+          card:
+            type: markdown
+            content: |
+              {% set s = states('sensor.power_control_status') %}
+              {% set p = state_attr('sensor.power_control_status', 'power') %}
+              {% set t = states('sensor.power_control_shed_at') %}
+              {% set nxt = state_attr('sensor.power_control_status', 'next_to_switch_off') %}
+              {% if s == 'shedding' %}
+              ## ⚡ Sto spegnendo dei carichi
+              Consumo {{ p }} W: spengo in ordine per non far saltare il contatore.
+              {% elif s in ['warning', 'over_threshold'] %}
+              ## ⚡ Consumi alti: {{ p }} W
+              {% if t not in ['unknown', 'unavailable'] %}Se non spegni qualcosa, alle **{{ as_timestamp(t) | timestamp_custom('%H:%M') }}** spengo **{{ nxt or 'i carichi' }}**.{% endif %}
+              {% elif s == 'loads_off' %}
+              ## ⛔ Carichi spenti per i consumi
+              {{ state_attr('sensor.power_control_loads_off', 'loads') | join(', ') }}: li riaccendo appena c'è posto.
+              {% endif %}
+        - type: tile
+          entity: switch.power_control_enabled
+          name: Controllo carichi
+          color: green
+          tap_action:
+            action: toggle
+          grid_options:
+            columns: 12
+        - type: gauge
+          entity: sensor.YOUR_HOUSE_POWER
+          name: Consumo di casa
+          min: 0
+          max: 4500
+          needle: true
+          severity:
+            green: 0
+            yellow: 2800
+            red: 3300
+          grid_options:
+            columns: 12
+        - type: tile
+          entity: sensor.power_control_status
+          name: Stato
+          color: blue
+        - type: tile
+          entity: sensor.power_control_headroom
+          name: Margine
+          color: teal
+        - type: conditional
+          conditions:
+            - condition: state
+              entity: sensor.power_control_shed_at
+              state_not:
+                - unknown
+                - unavailable
+          card:
+            type: tile
+            entity: sensor.power_control_shed_at
+            name: Distacco alle
+            color: red
+        - type: markdown
+          content: |
+            {% set e = states('sensor.power_control_last_event') %}
+            {% set t = state_attr('sensor.power_control_last_event', 'time') %}
+            {% if e in ['unknown', 'unavailable', ''] %}
+            Ancora nessun intervento.
+            {% else %}
+            **Ultimo evento**{{ (' · ' ~ (as_timestamp(t) | timestamp_custom('%d/%m %H:%M'))) if t else '' }}
+
+            {{ e }}
+            {% endif %}
+    - type: grid
+      cards:
+        - type: heading
+          heading: Carichi in ordine di spegnimento
+          icon: mdi:format-list-numbered
+        - type: markdown
+          content: |
+            {% set loads = state_attr('sensor.power_control_status', 'loads') or [] %}
+            {% if loads | count == 0 %}
+            Nessun carico scelto: premi **Scegli carichi e ordine** qui sotto.
+            {% else %}
+            Il primo della lista è il primo a essere spento e l'ultimo a essere riacceso.
+  
+            | # | Carico | Consumo | Stato |
+            |:-:|:--|--:|:--|
+            {% for l in loads %}| {{ l.order }} | {{ l.name }} | {{ (l.power ~ ' W') if l.power is not none else '—' }} | {% if l.switched_off %}⛔ spento da Power Control{% elif l.active %}⚡ in uso{% elif l.state in ['off', 'standby'] %}spento{% elif l.state in ['unavailable', 'unknown', 'missing'] %}⚠️ non raggiungibile{% else %}acceso, non consuma{% endif %}{% if not l.auto_restore %} · 🔒 non si riaccende da solo{% endif %} |
+            {% endfor %}
+            {% endif %}
+        - type: button
+          name: Scegli carichi e ordine
+          icon: mdi:sort
+          show_state: false
+          tap_action:
+            action: navigate
+            navigation_path: /config/integrations/integration/power_control
+          grid_options:
+            columns: 12
+            rows: 1
+        - type: conditional
+          conditions:
+            - condition: numeric_state
+              entity: sensor.power_control_loads_off
+              above: 0
+          card:
+            type: vertical-stack
+            cards:
+              - type: button
+                name: Riaccendi ora i carichi spenti
+                icon: mdi:power-plug-battery
+                show_state: false
+                tap_action:
+                  action: perform-action
+                  perform_action: button.press
+                  target:
+                    entity_id: button.power_control_restore_now
+                  confirmation:
+                    text: Riaccendo subito tutti i carichi spenti, anche se i consumi sono ancora alti. Continuare?
+              - type: button
+                name: Dimentica i carichi spenti
+                icon: mdi:playlist-remove
+                show_state: false
+                tap_action:
+                  action: perform-action
+                  perform_action: button.press
+                  target:
+                    entity_id: button.power_control_forget_loads_off
+                  confirmation:
+                    text: Power Control non li riaccenderà più da solo. Continuare?
+    - type: grid
+      cards:
+        - type: heading
+          heading: Soglie e avvisi
+          icon: mdi:tune-variant
+        - type: entities
+          entities:
+            - entity: number.power_control_shed_threshold
+              name: Spegni sopra
+            - entity: number.power_control_shed_delay
+              name: …per più di
+            - entity: number.power_control_urgent_threshold
+              name: Spegni subito sopra
+            - entity: number.power_control_restore_threshold
+              name: Riaccendi sotto
+            - type: divider
+            - entity: switch.power_control_push_notifications
+              name: Avvisi sul telefono
+            - entity: switch.power_control_voice_notifications
+              name: Annunci vocali
+        - type: markdown
+          content: |
+            Telefoni, altoparlanti, orari degli annunci e tempi di attesa si scelgono in **Impostazioni → Dispositivi e servizi → Power Control → Configura**.
+        - type: custom:apexcharts-card
+          graph_span: 6h
+          header:
+            show: true
+            title: Ultime 6 ore
+            show_states: false
+          series:
+            - entity: sensor.YOUR_HOUSE_POWER
+              name: Consumo
+              type: area
+              stroke_width: 2
+              opacity: 0.2
+              color: orange
+              group_by:
+                duration: 2min
+                func: max
+            - entity: number.power_control_shed_threshold
+              name: Soglia distacco
+              curve: stepline
+              stroke_width: 1
+              color: red
+            - entity: number.power_control_urgent_threshold
+              name: Soglia urgente
+              curve: stepline
+              stroke_width: 1
+              color: darkred
+  cards: []

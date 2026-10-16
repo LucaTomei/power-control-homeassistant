@@ -1,0 +1,72 @@
+{
+  "entity": {
+    "button": {
+      "forget_loads_off": {
+        "default": "mdi:playlist-remove"
+      },
+      "restore_now": {
+        "default": "mdi:power-plug-battery"
+      }
+    },
+    "number": {
+      "restore_threshold": {
+        "default": "mdi:power-plug"
+      },
+      "shed_delay": {
+        "default": "mdi:timer-sand"
+      },
+      "shed_threshold": {
+        "default": "mdi:power-plug-off"
+      },
+      "urgent_threshold": {
+        "default": "mdi:alert"
+      }
+    },
+    "sensor": {
+      "headroom": {
+        "default": "mdi:gauge"
+      },
+      "last_event": {
+        "default": "mdi:message-text-clock"
+      },
+      "loads_off": {
+        "default": "mdi:power-plug-off-outline"
+      },
+      "shed_at": {
+        "default": "mdi:timer-alert-outline"
+      },
+      "status": {
+        "default": "mdi:shield-check",
+        "state": {
+          "disabled": "mdi:shield-off-outline",
+          "loads_off": "mdi:power-plug-off",
+          "meter_unavailable": "mdi:gauge-empty",
+          "over_threshold": "mdi:flash-alert",
+          "restoring": "mdi:power-plug-battery",
+          "shedding": "mdi:flash-off",
+          "warning": "mdi:alarm-light"
+        }
+      }
+    },
+    "switch": {
+      "enabled": {
+        "default": "mdi:shield-home",
+        "state": {
+          "off": "mdi:shield-off-outline"
+        }
+      },
+      "push_notifications": {
+        "default": "mdi:cellphone-message",
+        "state": {
+          "off": "mdi:cellphone-off"
+        }
+      },
+      "voice_notifications": {
+        "default": "mdi:account-voice",
+        "state": {
+          "off": "mdi:volume-off"
+        }
+      }
+    }
+  }
+}
