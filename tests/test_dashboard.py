@@ -68,10 +68,17 @@ async def test_templates_render_in_every_situation(hass: HomeAssistant, freezer:
     assert any("🔒 non si riaccende da solo" in t for t in texts)
     assert any("Ancora nessun intervento" in t for t in texts)
 
-    house.set_base(1500)  # 4100 W: over the threshold
+    house.set_base(1000)  # 3600 W: over the switch-off threshold
     await advance(hass, engine, freezer, seconds=1)
     texts = _render_all(hass)
-    assert any("Consumi alti: 4100 W" in t and "spengo **lavatrice**" in t for t in texts)
+    assert any("Consumi alti: 3600 W" in t and "spengo **lavatrice**" in t for t in texts)
+    assert hass.states.get("sensor.power_control_status").attributes["urgent_at"] is None
+
+    house.set_base(1500)  # 4100 W: over the urgent threshold too
+    await advance(hass, engine, freezer, seconds=1)
+    texts = _render_all(hass)
+    assert any("Sopra la soglia urgente: 4100 W" in t and "spengo **lavatrice**" in t for t in texts)
+    assert hass.states.get("sensor.power_control_status").attributes["urgent_at"] is not None
 
     await advance(hass, engine, freezer, minutes=61)
     texts = _render_all(hass)

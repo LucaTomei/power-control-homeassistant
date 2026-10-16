@@ -15,9 +15,13 @@
       {% set p = state_attr('sensor.power_control_status', 'power') %}
       {% set t = states('sensor.power_control_shed_at') %}
       {% set nxt = state_attr('sensor.power_control_status', 'next_to_switch_off') %}
+      {% set ua = state_attr('sensor.power_control_status', 'urgent_at') %}
       {% if s == 'shedding' %}
       ## ⚡ Sto spegnendo dei carichi
       Consumo {{ p }} W: spengo in ordine per non far saltare il contatore.
+      {% elif s in ['warning', 'over_threshold'] and ua %}
+      ## 🚨 Sopra la soglia urgente: {{ p }} W
+      Se non scende, alle **{{ as_timestamp(ua) | timestamp_custom('%H:%M:%S') }}** spengo **{{ nxt or 'i carichi' }}**.
       {% elif s in ['warning', 'over_threshold'] %}
       ## ⚡ Consumi alti: {{ p }} W
       {% if t not in ['unknown', 'unavailable'] %}Se non spegni qualcosa, alle **{{ as_timestamp(t) | timestamp_custom('%H:%M') }}** spengo **{{ nxt or 'i carichi' }}**.{% endif %}

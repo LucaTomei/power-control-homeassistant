@@ -91,7 +91,7 @@ Copy `custom_components/power_control` into `config/custom_components/` (or extr
 | `number.power_control_shed_delay` | How long above it before switching off (min) |
 | `number.power_control_urgent_threshold` | Urgent threshold (W) |
 | `number.power_control_restore_threshold` | Restore threshold (W) |
-| `sensor.power_control_status` | `ok`, `over_threshold`, `warning`, `shedding`, `loads_off`, `restoring`, `disabled`, `meter_unavailable`. Attributes: `power`, `next_to_switch_off`, `loads` (order, power, state of every load) |
+| `sensor.power_control_status` | `ok`, `over_threshold`, `warning`, `shedding`, `loads_off`, `restoring`, `disabled`, `meter_unavailable`. Attributes: `power`, `next_to_switch_off`, `urgent_at` (when a load is switched off if consumption stays over the urgent threshold), `loads` (order, power, state of every load) |
 | `sensor.power_control_shed_at` | When the loads will be switched off |
 | `sensor.power_control_loads_off` | How many loads are switched off (attribute `loads`) |
 | `sensor.power_control_headroom` | Watts left before the threshold |

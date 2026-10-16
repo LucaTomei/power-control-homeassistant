@@ -515,6 +515,13 @@ class PowerControlEngine:
     def status(self) -> str:
         return self._status
 
+    @property
+    def urgent_deadline(self) -> datetime | None:
+        """When a load is switched off if consumption stays over the urgent threshold."""
+        if self._urgent_since is None or not self.enabled or self.next_load_to_shed() is None:
+            return None
+        return self._urgent_since + timedelta(seconds=self.settings.urgent_delay)
+
     # ------------------------------------------------------------------ actions
     @callback
     def _warn(self, power: float) -> None:

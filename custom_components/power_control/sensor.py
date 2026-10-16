@@ -47,9 +47,11 @@ class StatusSensor(PowerControlEntity, SensorEntity):
     def extra_state_attributes(self) -> dict[str, Any]:
         engine = self._engine
         nxt = engine.next_load_to_shed()
+        urgent_at = engine.urgent_deadline
         return {
             "power": round(engine.power) if engine.power is not None else None,
             "next_to_switch_off": engine.load_name(nxt) if nxt else None,
+            "urgent_at": urgent_at.isoformat() if urgent_at else None,
             "loads": engine.loads_info(),
         }
 
