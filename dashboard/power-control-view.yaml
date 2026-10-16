@@ -205,9 +205,17 @@
               curve: stepline
               stroke_width: 1
               color: red
+              # current value across the whole chart: needs no history
+              data_generator: |
+                const v = Number(entity.state);
+                return isNaN(v) ? [] : [[start.getTime(), v], [end.getTime(), v]];
             - entity: number.power_control_urgent_threshold
               name: Soglia urgente
               curve: stepline
               stroke_width: 1
               color: darkred
+              # current value across the whole chart: needs no history
+              data_generator: |
+                const v = Number(entity.state);
+                return isNaN(v) ? [] : [[start.getTime(), v], [end.getTime(), v]];
   cards: []
